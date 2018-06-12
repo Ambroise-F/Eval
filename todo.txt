@@ -44,3 +44,26 @@ for( c=0,j=i; j<n; j++ ) {
 	A[j] = t;
 	c = t + c mod p;
 }
+
+
+=> virer la boucle for avec les n (enlever *X des args de evalnext2)
+=> cast au début de la boucle
+=> cast à la fin
+=> mettre les algos
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
