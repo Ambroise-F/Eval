@@ -1,0 +1,46 @@
+Pierre,
+Attached is a C code that you can compile with
+gcc -O3 evalnext2.c
+When you execute it you will get something like this output
+
+   *** Timing test ***
+   #terms = 50000
+   #vars = 6
+   #vars evaluated = 4
+   degree = 10
+   #evaluations = 10000
+
+randpoly time = 7 ms
+sort time = 558 ms
+evalinit time = 22 ms
+evalnext2 time = 2199 ms
+Average evaluation length = 450
+
+This means I created a random polynomial in n=6 variables with t=50000
+terms of degree d=10 in each variable, and sorted it on the monomials.
+Then I evaluated the last m=4 variables at beta[i]^k for k=1,...,10000
+in a simple loop.  The evalnext2 subroutine is the core of the 
+comptuation.  It calls mulrec64 which is Roman's  6 cycle  64 bit
+multiplication mod p.  It's the inner loop is
+
+         for( c=0,j=i; j<n; j++ ) { t = mulrec64(A[j],G[j],P); A[j] = t; c = add64s(t,c,p); }
+         for( d=0,j=i; j<n; j++ ) { t = mulrec64(A[j],G[j],P); A[j] = t; d = add64s(t,d,p); }
+
+which we want to optimize.  This is doing two evalutions at a time.
+The lengths n-i here can be small or large
+depending on how many monomials in n variables evaluate to the same
+monomial in 2 variables.  I've computed the average value of n-i and 
+printed it -- it's 450 on this test.
+
+
+=> polynôme multivarié avec 6 variables, 50000 termes de degré 10 (sur 10⁶=1 000 000 termes possibles)
+
+=>
+
+for( c=0,j=i; j<n; j++ ) { t = mulrec64(A[j],G[j],P); A[j] = t; c = add64s(t,c,p); }
+
+for( c=0,j=i; j<n; j++ ) { 
+	t = A[j] * G[j] mod P;
+	A[j] = t;
+	c = t + c mod p;
+}
