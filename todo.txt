@@ -35,7 +35,7 @@ printed it -- it's 450 on this test.
 
 => polynôme multivarié avec 6 variables, 50000 termes de degré 10 (sur 10⁶=1 000 000 termes possibles)
 
-=>
+=> transformation en polynôme multivarié à 2 variables : env 50000 termes réunis en 110 
 
 for( c=0,j=i; j<n; j++ ) { t = mulrec64(A[j],G[j],P); A[j] = t; c = add64s(t,c,p); }
 
@@ -46,19 +46,13 @@ for( c=0,j=i; j<n; j++ ) {
 }
 
 
-=> virer la boucle for avec les n (enlever *X des args de evalnext2)
-=> cast au début de la boucle
-=> cast à la fin
-=> mettre les algos
+=> virer la boucle for avec les n (enlever *X des args de evalnext2)    OK
+=> faire un script pour vérifier la réponse				TODO
+=> cast au début de la boucle						TODO
+=> cast à la fin							TODO
+=> mettre les algos							TODO 
 
-
-
-
-
-
-
-
-
+	
 
 
 
