@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <stdlib.h>
+#include <math.h>
 
 #define DEBUG 0
 #define DEBUGN 0
@@ -15,6 +16,41 @@
 
 #define LONG long long int
 #define ULONG unsigned long long int
+
+#define REAL double
+#define FMA(a,b,c) fma((a),(b),(c))
+#define FLOOR(a) floor(a)
+
+#define mulmod(x,y)   ({REAL h,l,b,c,d,g,gs,gb;	\
+      int ts,tb;				\
+      h = x*y;					\
+      l = FMA(x,y,-h);				\
+      b = h*u;					\
+      c = FLOOR(b);				\
+      d = FMA(-c,pr,h);				\
+      g = d + l;				\
+      ts = g<0;					\
+      tb = g>=pr;				\
+      gs = g+pr;				\
+      gb = g-pr;				\
+      if (ts) { g=gs; }				\
+      if (tb) { g=gb; }				\
+      g; })
+
+
+#if (DEBUG==0)
+REAL pr = 1125899906842597.0;
+REAL u = 1.0/1125899906842597.0;
+#else
+/* REAL pr = 1125899906842597.0; */
+/* REAL u = 1.0/1125899906842597.0; */
+REAL pr = 11.0;
+REAL u = 1.0/11;
+#endif
+
+
+
+
 
 LONG * array( int n ) { return (LONG *) malloc( (LONG) n*sizeof(LONG) ); }
 
@@ -109,6 +145,34 @@ static inline LONG mul64s(LONG a, LONG b, LONG p) {
         return r;
 }
 
+#pragma omp declare simd
+static inline REAL add50s(REAL a, REAL b){
+  REAL s;
+  s = a + b;
+  return s>=pr?s-pr:s;
+}//pr global var
+
+#pragma omp declare reduction (add50s:REAL:omp_out=add50s(omp_out,omp_in)) initializer (omp_priv=0.0)
+
+#pragma omp declare simd
+static inline REAL mul50s(REAL x, REAL y){
+  REAL h,l,b,c,d,g,gs,gb;
+  int ts,tb;
+  h = x*y;
+  l = FMA(x,y,-h);
+  b = h*u;
+  c = FLOOR(b);
+  d = FMA(-c,pr,h);
+  g = d + l;
+  ts = g<0; //too small
+  tb = g>=pr;//too big
+  gs = g+pr;
+  gb = g-pr;
+  if (ts) { g=gs; }
+  if (tb) { g=gb; }
+  return g;    
+}//pr & u global vars (can be args)
+
 /* a^n mod p assuming 0 <= a < p < 2^63 */
 LONG powmod64s( LONG a, LONG n, LONG p )
 {   LONG r,s;
@@ -199,7 +263,7 @@ void randpoly64s( int n, int *DEG, int t, LONG *A, LONG *X, LONG p )
 LONG evalnext2( LONG *A, LONG *X, LONG *G, int na, 
                 LONG *B, LONG *C, LONG *Y, LONG *Z, 
                 int * nave,
-                LONG p, int *N)
+                LONG p, int *N, REAL *Ar, REAL *Gr)
 {   
 
     // a = sum( A[i] X[i], i=1..na ) where the monomials in X are sorted in ascending order
@@ -208,9 +272,22 @@ LONG evalnext2( LONG *A, LONG *X, LONG *G, int na,
     // So that's two evaluations, one in B,Y and the second in C,Z
 
     int i,j,k,m,n,nn;
-    LONG c,d,t,x,ntotal,ncount;
-    recint P;
-    P = recip1(p);
+    LONG t,x,ntotal,ncount;
+    //recint P;
+ 
+    
+    REAL tr,cr,dr;
+    
+    //pr = (REAL)p;
+    //u = (REAL)1.0/pr;
+    
+    
+
+    
+
+
+    
+    //P= recip1(p);//inutile
     k = m = 0;
     ntotal = 0;
     ncount = 0;
@@ -219,9 +296,8 @@ LONG evalnext2( LONG *A, LONG *X, LONG *G, int na,
     n=0;
     nn=0;
     
-
-    
     while (i<na){
+        //printf("i = %d\n",i);
         //for( x=X[i],n=i+1; n<na && X[n]==x ; n++ ); // while (X[n]==x && n<na) {n++;}
         x=X[n];
 	n=N[nn];
@@ -229,17 +305,17 @@ LONG evalnext2( LONG *A, LONG *X, LONG *G, int na,
 	ntotal += (n-i);
         ncount ++;
 
-	if (DEBUG){
-	    printf("i = %d    -    n = %d    -    x = %ld\n",i,n,x);	    
-	}
-
+	if (DEBUGN){ printf("i = %d    -    n = %d    -    x = %ld\n",i,n,x);}	    
 	
+
+    /* 
+        //LONG
 	// 1 boucle
-	/* c = d = 0; */
-	/* for( j=i; j<n; j++ ) { */
-        /*   t = mulrec64(A[j],G[j],P); c = add64s(t,c,p); */
-        /*   t = mulrec64(t,G[j],P); A[j] = t; d = add64s(t,d,p); */
-        /* } */
+	c = d = 0;
+	for( j=i; j<n; j++ ) {
+          t = mulrec64(A[j],G[j],P); c = add64s(t,c,p);
+          t = mulrec64(t,G[j],P); A[j] = t; d = add64s(t,d,p);
+        }
 
 	// 2 boucles
         for( c=0,j=i; j<n; j++ ) { t = mulrec64(A[j],G[j],P); A[j] = t; c = add64s(t,c,p); }
@@ -247,11 +323,81 @@ LONG evalnext2( LONG *A, LONG *X, LONG *G, int na,
 	
         if( c!=0 ) { B[k] = c; Y[k] = x; k++; }
         if( d!=0 ) { C[m] = d; Z[m] = x; m++; }
+    */
 
+        //REAL
+	/*	
+	// 1 boucle
+	cr = dr = 0.0;
+#pragma omp simd reduction (add50s:cr,dr)
+        for( j=i; j<n; j++ ) {
+
+          tr = mulmod(Ar[j],Gr[j]); cr = add50s(tr,cr);
+          tr = mulmod(tr,Gr[j]); Ar[j] = tr; dr = add50s(tr,dr);
+	  
+          tr = mul50s(Ar[j],Gr[j]); cr = add50s(tr,cr);
+          tr = mul50s(tr,Gr[j]); Ar[j] = tr; dr = add50s(tr,dr);
+        }
+	*/
+
+	
+	// 2 boucles
+	cr = 0.0;
+	dr = 0.0;
+
+	
+#pragma omp simd reduction (add50s:cr)
+	for(j=i; j<n; j++ ) {
+	  tr = mul50s(Ar[j],Gr[j]);
+	  Ar[j] = tr;
+	  cr = add50s(tr,cr);
+	}
+	
+	/*
+#pragma omp simd reduction (add50s:cr)
+	for(j=i; j<n; j++ ) {
+	  
+	  REAL h,l,b,c,d,gs,gb;
+	  int ts,tb;
+	  h = Ar[j]*Gr[j];
+	  l = FMA(Ar[j],Gr[j],-h);
+	  b = h*u;
+	  c = FLOOR(b);
+	  d = FMA(-c,pr,h);
+	  tr = d + l;
+	  ts = tr<0; //too small
+	  tb = tr>=pr;//too big
+	  gs = tr+pr;
+	  gb = tr-pr;
+	  if (ts) { tr=gs; }
+	  if (tb) { tr=gb; }
+	  
+	  Ar[j] = tr;
+	  cr = add50s(tr,cr);
+	}
+	*/
+
+
+	
+	
+#pragma omp simd reduction (add50s:dr)
+	for(j=i; j<n; j++ ) {
+	  tr = mul50s(Ar[j],Gr[j]);
+	  //tr = mulmod(Ar[j],Gr[j]);
+	  Ar[j] = tr;
+	  dr = add50s(tr,dr);
+	}
+       
+
+	
+	if( cr!=0.0 ) { B[k] = (LONG)cr; Y[k] = x; k++; }
+	if( dr!=0.0 ) { C[m] = (LONG)dr; Z[m] = x; m++; }
+    
 	i=n;
 	nn++;
     }
-    if (DEBUG)printf("last\ni = %d    -    n = %d\n",i,n);
+
+    if (DEBUGN){printf("last\ni = %d    -    n = %d\n",i,n);}
 
     if( ncount>0 ) nave[0] = ntotal/ncount;
     t = ((LONG) k << 32) | m;
@@ -318,6 +464,9 @@ void test( int numevals,
     int i,tB,tC,D[32],dB,dC,nave, *N;
     LONG s, *A, *X, *B, *Y, *C, *Z, *G, *BETA, mask;
     clock_t T1,T2;
+    REAL *Ar, *Gr;
+
+    
     
     for( i=0; i<n; i++ ) D[i] = d;
     
@@ -325,27 +474,31 @@ void test( int numevals,
     X = array(t);
     N = malloc(sizeof(int)*(d+1)*(d+1));
     
-	      
+    
       T1 = clock();
-   randpoly64s( n, D, t, A, X, p );
-   //printf("A := "); polnsparseprint64s( A, X, t, n ); printf(";\n");
+      
+      randpoly64s( n, D, t, A, X, p );
+      //printf("A := "); polnsparseprint64s( A, X, t, n ); printf(";\n");
       T2 = clock();
       if( !print ) printf("#randpoly time = %lld ms\n", (T2-T1)/1000 );
    pol2sort64s( A, X, t );
       for( i=0; i<t-1; i++ ) if( X[i]>X[i+1] ) printf("NOT SORTED\n"); 
       T1 = clock();
       if( !print ) printf("#sort time = %lld ms\n", (T1-T2)/1000 );
-
+      
 
 if( print ) {
    printf("p := %lld;\n",p);
    printf("A := "); polnsparseprint64s( A, X, t, n ); printf(";\n");
 }
-
    BETA = array(m);
    for( i=0; i<m; i++ ) BETA[i] = rand64s(p);
 
    G = array(t);
+
+   posix_memalign((void **)&Ar, 64,t*sizeof(REAL));
+   posix_memalign((void **)&Gr, 64,t*sizeof(REAL));
+
 
       T1 = clock();
       evalinit( X, t, n, BETA, m, G, p, N);
@@ -361,7 +514,7 @@ if( print ) {
       T1 = clock();
 
       
-      if (DEBUGN){
+      if (DEBUGN && print){
 	  i=0;
 	  while(N[i]!=t){
 	      printf("N[%d] = %d\n",i,N[i]);
@@ -373,8 +526,18 @@ if( print ) {
 	  x = 9;
 	  printf("test :\nX[%d] = %ld\nX[%d] = %ld\nX[%d] = %ld\n",x-1,X[x-1],x,X[x],x+1,X[x+1]);
       }
-
-      for( i=0; i<numevals; i++ ) s = evalnext2( A, X, G, t, B, C, Y, Z, &nave, p, N );
+      
+      // conversion
+      //INT=>REAL
+      // A => Ar
+      // G => Gr
+      for( i=0; i<t; i++ ) {  
+	Ar[i] = (REAL)A[i];
+	Gr[i] = (REAL)G[i];
+      }
+      
+      for( i=0; i<numevals; i++ ) s = evalnext2( A, X, G, t, B, C, Y, Z, &nave, p, N, Ar, Gr);
+      
       T2 = clock();
       if( !print ) printf("#-----------------------------\n#evalnext2 time = %lld ms\n#-----------------------------\n", (T2-T1)/1000 );
 
@@ -420,7 +583,7 @@ LONG p;
 
 if( DEBUG ) {
 
-   p = 11;  // prime
+   p = 11;  // prime   
    t = 10;  // #terms
    n = 5;   // #variables
    m = n-2; // #variables evaluated -- must be n-2
@@ -428,6 +591,7 @@ if( DEBUG ) {
    N = 1;   // 2 evaluations
 
    test( 1, n, m, t, d, p, 1 );
+   return 1;
    
    
 }
@@ -436,6 +600,8 @@ if( DEBUG ) {
 
    if(PRIME50){
      p = 1125899906842597;
+     //pr = (REAL)p;
+     //u = 1/pr;
    }else{
      p = 9223372036854775783LL;
    }
@@ -447,7 +613,7 @@ if( DEBUG ) {
    m = n-2;     printf("  #vars evaluated = %d\n",m);
    d = 10;      printf("  #degree = %d\n",d);
    N = 5000;    printf("  #evaluations = %d\n\n", 2*N);
-   
+  
    test( N, n, m, t, d, p, VERIF );
    return 1;
 

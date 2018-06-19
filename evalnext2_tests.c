@@ -252,7 +252,7 @@ LONG evalnext2( LONG *A, LONG *X, LONG *G, int na,
     REAL tr,cr,dr,pr;
     REAL *Ar, *Gr;
     pr = (REAL)p;
-    u = (REAL)1.0/u;
+    u = (REAL)1.0/pr;
     //Ar = malloc(sizeof(REAL)*na); //aligned
     //Gr = malloc(sizeof(REAL)*na); //aligned
     

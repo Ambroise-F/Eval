@@ -199,7 +199,7 @@ void randpoly64s( int n, int *DEG, int t, LONG *A, LONG *X, LONG p )
 LONG evalnext2( LONG *A, LONG *X, LONG *G, int na, 
                 LONG *B, LONG *C, LONG *Y, LONG *Z, 
                 int * nave,
-                LONG p )
+                LONG p, int *N)
 {   
 
     // a = sum( A[i] X[i], i=1..na ) where the monomials in X are sorted in ascending order
@@ -207,44 +207,59 @@ LONG evalnext2( LONG *A, LONG *X, LONG *G, int na,
     //Compute A[i] = G[i] A[i] mod p and create C,Z = sum( A[i] X[i], i=1..na ) 
     // So that's two evaluations, one in B,Y and the second in C,Z
 
-    int i,j,k,m,n;
+    int i,j,k,m,n,nn;
     LONG c,d,t,x,ntotal,ncount;
     recint P;
     P = recip1(p);
     k = m = 0;
     ntotal = 0;
     ncount = 0;
-    for( i=0; i<na; i=n ) {
-      //printf("i = %d\n",i);
-        for( x=X[i],n=i+1; n<na && X[n]==x; n++ );
-        ntotal += (n-i);
+    
+    i=0;
+    n=0;
+    nn=0;
+    
+
+    
+    while (i<na){
+        //for( x=X[i],n=i+1; n<na && X[n]==x ; n++ ); // while (X[n]==x && n<na) {n++;}
+        x=X[n];
+	n=N[nn];
+	
+	ntotal += (n-i);
         ncount ++;
 
-	
-	if (DEBUGN){
-	  printf("i = %d    -    n = %d    -    x = %ld\n",i,n,x);	    
+	if (DEBUG){
+	    printf("i = %d    -    n = %d    -    x = %ld\n",i,n,x);	    
 	}
+
 	
-	//c = d = 0;
-        //for( j=i; j<n; j++ ) {
-        //   t = mulrec64(A[j],G[j],P); c = add64s(t,c,p);
-        //   t = mulrec64(t,G[j],P); A[j] = t; d = add64s(t,d,p);
-        //}
+	// 1 boucle
+	/* c = d = 0; */
+	/* for( j=i; j<n; j++ ) { */
+        /*   t = mulrec64(A[j],G[j],P); c = add64s(t,c,p); */
+        /*   t = mulrec64(t,G[j],P); A[j] = t; d = add64s(t,d,p); */
+        /* } */
+
+	// 2 boucles
         for( c=0,j=i; j<n; j++ ) { t = mulrec64(A[j],G[j],P); A[j] = t; c = add64s(t,c,p); }
         for( d=0,j=i; j<n; j++ ) { t = mulrec64(A[j],G[j],P); A[j] = t; d = add64s(t,d,p); }
-	//printf("c = %ld\n",c);
+	
         if( c!=0 ) { B[k] = c; Y[k] = x; k++; }
         if( d!=0 ) { C[m] = d; Z[m] = x; m++; }
+
+	i=n;
+	nn++;
     }
-    if (DEBUGN)printf("last\ni = %d    -    n = %d\n",i,n);
-    
+    if (DEBUG)printf("last\ni = %d    -    n = %d\n",i,n);
+
     if( ncount>0 ) nave[0] = ntotal/ncount;
     t = ((LONG) k << 32) | m;
     return t;
 }
 
 
-void evalinit( LONG *X, int t, int n, LONG *BETA, int m, LONG *G, LONG p )
+void evalinit( LONG *X, int t, int n, LONG *BETA, int m, LONG *G, LONG p, int *N )
 {   // Evaluate the last m variables in the monoimials in X
     // Put the monomial evaluations in G and update the monomials in X
     int i,j,numbits,shift,d;
@@ -252,7 +267,7 @@ void evalinit( LONG *X, int t, int n, LONG *BETA, int m, LONG *G, LONG p )
    
     numbits = 63/n;
     mask = (1LL<<numbits)-1;
-
+    
     for( i=0; i<t; i++ ) {
        z = 1;
        x = X[i];
@@ -271,8 +286,21 @@ void evalinit( LONG *X, int t, int n, LONG *BETA, int m, LONG *G, LONG p )
        }
        X[i] = y;
     }
+    // calculation of n values (as used in evalnext2)
+    i=0;
+    j=0;
+    while (i<t){
+        for( x=X[i],n=i+1; n<t && X[n]==x; n++ );
+	//n vaut l'indice de départ de la prochaine série
+	N[j++]=n;
+	i=n;	
+    }
+    // taille de N = (degree+1)**(vars not evaluated)
+
+    
     return;
 }
+
 
 /******************************************************************************************/
 /* Test routine                                                                           */
@@ -287,15 +315,17 @@ void test( int numevals,
            int print // print polynomials to check in Maple
          ) {
           
-int i,tB,tC,D[32],dB,dC,nave;
-LONG s, *A, *X, *B, *Y, *C, *Z, *G, *BETA, mask;
-clock_t T1,T2;
-
-   for( i=0; i<n; i++ ) D[i] = d;
-
-   A = array(t);
-   X = array(t);
-
+    int i,tB,tC,D[32],dB,dC,nave, *N;
+    LONG s, *A, *X, *B, *Y, *C, *Z, *G, *BETA, mask;
+    clock_t T1,T2;
+    
+    for( i=0; i<n; i++ ) D[i] = d;
+    
+    A = array(t);
+    X = array(t);
+    N = malloc(sizeof(int)*(d+1)*(d+1));
+    
+	      
       T1 = clock();
    randpoly64s( n, D, t, A, X, p );
    //printf("A := "); polnsparseprint64s( A, X, t, n ); printf(";\n");
@@ -318,8 +348,10 @@ if( print ) {
    G = array(t);
 
       T1 = clock();
-   evalinit( X, t, n, BETA, m, G, p );
+      evalinit( X, t, n, BETA, m, G, p, N);
       T2 = clock();
+            
+	  
       if( !print ) printf("#evalinit time = %lld ms\n", (T2-T1)/1000 );
    
 
@@ -327,7 +359,22 @@ if( print ) {
    C = array(t); Z = array(t);
 
       T1 = clock();
-   for( i=0; i<numevals; i++ ) s = evalnext2( A, X, G, t, B, C, Y, Z, &nave, p );
+
+      
+      if (DEBUGN){
+	  i=0;
+	  while(N[i]!=t){
+	      printf("N[%d] = %d\n",i,N[i]);
+	      i++;
+	  }
+	  printf("N[%d] = %d\n",i,N[i]);
+     	  int x = 6;
+	  printf("test :\nX[%d] = %ld\nX[%d] = %ld\nX[%d] = %ld\n",x-1,X[x-1],x,X[x],x+1,X[x+1]);
+	  x = 9;
+	  printf("test :\nX[%d] = %ld\nX[%d] = %ld\nX[%d] = %ld\n",x-1,X[x-1],x,X[x],x+1,X[x+1]);
+      }
+
+      for( i=0; i<numevals; i++ ) s = evalnext2( A, X, G, t, B, C, Y, Z, &nave, p, N );
       T2 = clock();
       if( !print ) printf("#-----------------------------\n#evalnext2 time = %lld ms\n#-----------------------------\n", (T2-T1)/1000 );
 
@@ -366,6 +413,8 @@ int main() {
 int d,n,m,t,N;
 LONG p;
 
+//printf("Verif :%d\n",VERIF);
+ 
    seed = 1;
    mult = 6364136223846793003ll;
 
@@ -379,10 +428,10 @@ if( DEBUG ) {
    N = 1;   // 2 evaluations
 
    test( 1, n, m, t, d, p, 1 );
-   return 1;
+   
    
 }
-
+   
    
 
    if(PRIME50){
@@ -390,13 +439,14 @@ if( DEBUG ) {
    }else{
      p = 9223372036854775783LL;
    }
+
    
-     printf("\n  #*** Timing test *** \n");
-     t = 50000;   printf("  #terms = %d\n",t);
-     n = 6;       printf("  #vars = %d\n",n);
-     m = n-2;     printf("  #vars evaluated = %d\n",m);
-     d = 10;      printf("  #degree = %d\n",d);
-     N = 5000;    printf("  #evaluations = %d\n\n", 2*N);
+   printf("\n  #*** Timing test *** \n");
+   t = 50000;   printf("  #terms = %d\n",t);
+   n = 6;       printf("  #vars = %d\n",n);
+   m = n-2;     printf("  #vars evaluated = %d\n",m);
+   d = 10;      printf("  #degree = %d\n",d);
+   N = 5000;    printf("  #evaluations = %d\n\n", 2*N);
    
    test( N, n, m, t, d, p, VERIF );
    return 1;
